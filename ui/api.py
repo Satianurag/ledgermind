@@ -54,6 +54,14 @@ def state_data(gov: GovernedMemoryClient) -> dict[str, Any]:
         tier = str(entry.get("tree", "")).split(":", 1)[0] or "unknown"
         tiers[tier] = tiers.get(tier, 0) + 1
 
+    # Order by tier so the case data a judge came to see (WARM) is at the top, not
+    # buried under the COLD event journal that sorts first alphabetically.
+    tier_rank = {"hot": 0, "warm": 1, "cold": 2, "reference": 3, "archive": 4}
+
+    def _rank(entry: dict[str, Any]) -> tuple[int, str, int]:
+        tier = str(entry.get("tree", "")).split(":", 1)[0]
+        return (tier_rank.get(tier, 9), str(entry.get("tree", "")), int(entry.get("sequence", 0)))
+
     chain = [
         {
             "tree": e.get("tree"),
@@ -65,7 +73,7 @@ def state_data(gov: GovernedMemoryClient) -> dict[str, Any]:
             "source_trust_tier": _provenance(e).get("source_trust_tier"),
             "evidence_ref": _provenance(e).get("evidence_ref"),
         }
-        for e in sorted(entries, key=lambda x: (x.get("tree", ""), x.get("sequence", 0)))
+        for e in sorted(entries, key=_rank)
     ]
 
     return {

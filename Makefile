@@ -1,4 +1,4 @@
-.PHONY: smoke-ui sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up setup-acp
+.PHONY: web-install smoke-ui sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up setup-acp
 
 sync:
 	uv sync --all-extras
@@ -22,7 +22,7 @@ seed:
 	PYTHONPATH=. uv run python demo/seed_case_2214.py
 
 demo: reset seed
-	uv run uvicorn ui.app:app --reload --port 8787
+	bash scripts/demo.sh
 
 eval:
 	PYTHONPATH=. uv run python eval/run_utility.py
@@ -54,3 +54,6 @@ verify-prd:
 
 smoke-ui:
 	bash scripts/smoke_ui.sh
+
+web-install:
+	cd web && npm install

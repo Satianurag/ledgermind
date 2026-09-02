@@ -1,0 +1,24 @@
+# Promptfoo eval config — vanilla Sibyl vs Ledgermind (FR-7)
+description: Ledgermind poisoning gauntlet ASR comparison
+
+prompts:
+  - "{{input}}"
+
+providers:
+  - id: vertex:gemini-3.5-flash
+    config:
+      project: "{{ env.VERTEX_PROJECT or env.GOOGLE_CLOUD_PROJECT }}"
+      region: global
+  - id: file://eval/providers/sibyl_vanilla.py
+    label: sibyl-vanilla
+  - id: file://eval/providers/sibyl_ledgermind.py
+    label: sibyl-ledgermind
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://eval/assertions/poison_caught.py
+
+tests: file://eval/gauntlet/tests.yaml
+
+outputPath: eval/output/results.json

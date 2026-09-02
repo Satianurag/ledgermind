@@ -1,0 +1,16 @@
+{
+  "name": "ledgermind-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/npm/ledgermind"
+  ],
+  "scripts": {
+    "eval": "npx promptfoo@0.122.2 eval -c eval/promptfoo.yaml",
+    "eval:view": "npx promptfoo@0.122.2 view"
+  },
+  "devDependencies": {
+    "@coinbase/cdp-cli": "^2.0.74",
+    "@virtuals-protocol/acp-cli": "^1.0.34",
+    "promptfoo": "0.122.2"
+  }
+}

@@ -1,0 +1,7 @@
+<div class="verdict {{ 'quarantine' if verdict.quarantined else 'clean' }}">
+  <h3>Defense Verdict</h3>
+  <p><strong>{{ verdict.detail }}</strong></p>
+  <p>Paths fired: {{ verdict.paths_fired | join(', ') or 'none' }}</p>
+  <p>Quarantined: {{ verdict.quarantined }} | Chain-break: {{ verdict.chain_break }}</p>
+  <pre>{{ verdict | tojson(indent=2) }}</pre>
+</div>

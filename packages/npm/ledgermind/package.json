@@ -1,0 +1,17 @@
+{
+  "name": "ledgermind",
+  "version": "0.1.0",
+  "description": "Governed coordination memory for agent teams",
+  "license": "MIT",
+  "bin": {
+    "ledgermind": "./bin/ledgermind.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "keywords": ["sibyl", "memory", "governance", "agents"],
+  "engines": {
+    "node": ">=18"
+  }
+}

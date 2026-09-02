@@ -1,0 +1,59 @@
+[project]
+name = "ledgermind"
+version = "0.1.0"
+description = "Governed coordination memory for agent teams (Sibyl Labs Hackathon)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "sibyl-memory-client==0.7.0",
+    "langgraph==1.2.11",
+    "langchain-google-vertexai==3.2.4",
+    "langchain-core>=0.3.0",
+    "google-genai==2.20.0",
+    "cryptography==50.0.1",
+    "jcs==0.2.1",
+    "blake3==1.0.9",
+    "cdp-sdk==1.48.1",
+    "x402[httpx]==2.21.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "rich>=13.9.0",
+    "web3>=7.0.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+    "jinja2>=3.1.0",
+    "pyyaml>=6.0.0",
+    "playwright>=1.62.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+ledgermind = "ledgermind.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/python/ledgermind/ledgermind"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["packages/python", "demo", "agents", "."]
+markers = [
+    "integration: live network tests",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

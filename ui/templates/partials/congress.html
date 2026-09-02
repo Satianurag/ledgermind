@@ -1,0 +1,12 @@
+<div class="congress">
+  <h3>Dispute Resolved</h3>
+  <p>Status: {{ dispute.status }} | Confidence: {{ dispute.confidence }}</p>
+  {% if arbiter %}
+  <p>Arbiter: {{ arbiter.backend }} ({{ arbiter.model }})</p>
+  {% if arbiter.reasoning %}
+  <p><strong>Reasoning:</strong> {{ arbiter.reasoning }}</p>
+  {% endif %}
+  {% endif %}
+  <p>Both versions visible in claimants:</p>
+  <pre>{{ dispute | tojson(indent=2) }}</pre>
+</div>

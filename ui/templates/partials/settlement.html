@@ -1,0 +1,9 @@
+<div class="settlement">
+  <h3>Settlement Receipts</h3>
+  <pre>{{ data | tojson(indent=2) }}</pre>
+  <h3>Commercial Decision</h3>
+  <p><strong>{{ decision }}</strong></p>
+  <h3>Decision Impact</h3>
+  <p>{{ flip.explanation }}</p>
+  <pre>{{ entry | tojson(indent=2) }}</pre>
+</div>

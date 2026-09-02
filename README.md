@@ -34,8 +34,23 @@ gcloud auth application-default login
 make sync
 make reset && make seed
 make test
-make demo              # FastAPI UI on :8787
+make demo              # seeds memory, starts the API, builds and serves the UI
 ```
+
+`make demo` runs both processes and prints their URLs:
+
+| | |
+|---|---|
+| http://localhost:3000 | Next.js 16 + shadcn demo — the five beats |
+| http://127.0.0.1:8787/api/state | governance JSON API |
+| http://127.0.0.1:8787/ | Jinja fallback UI, same data, no Node required |
+
+Both surfaces read the same functions in [`ui/api.py`](ui/api.py), so they cannot disagree
+about what the demo did. The front end holds no state of its own.
+
+> It uses `next build && next start`, not `next dev`. The dev server's HMR websocket does
+> not connect in every environment, and when it fails the page renders but never hydrates —
+> every beat stays empty and buttons silently do nothing. Record the demo against a build.
 
 ## Onchain settlement (Base Sepolia testnet — $0)
 

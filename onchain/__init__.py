@@ -10,7 +10,8 @@ from ledgermind.config import get_settings
 
 from onchain.acp import load_persisted_receipt as load_acp_receipt
 from onchain.b20 import read_b20
-from onchain.receipts import is_live_receipt, require_live_receipt
+from onchain.receipts import is_live_receipt
+from onchain.receipts import require_live_receipt as require_live_receipt  # re-export for bootstrap
 from onchain.wallet import enforce_cap
 from onchain.x402 import load_persisted_receipt as load_x402_receipt
 
@@ -18,31 +19,58 @@ RECEIPTS_DIR = Path(__file__).resolve().parents[1] / "demo-data" / "onchain"
 
 
 def load_settlement_receipts() -> dict[str, Any]:
-    """Load verified live onchain receipts from disk."""
+    """Load whatever live onchain receipts this checkout has.
+
+    Never raises and never synthesises. demo-data/ is gitignored, so a fresh clone -- which
+    is exactly what a judge does -- has no receipts at all. The settlement beat must still
+    render, reporting honestly which stacks were exercised and which were not, rather than
+    500ing. Use require_live_receipt() on the bootstrap path, where a missing or fake
+    receipt genuinely should be a hard failure.
+    """
+    receipts: list[dict[str, Any]] = []
+    unexercised: list[str] = []
+
     x402 = load_x402_receipt()
-    acp = load_acp_receipt()
+    if is_live_receipt(x402, require_tx=True):
+        receipts.append(x402)
+    else:
+        unexercised.append("x402")
+
     b20_file = RECEIPTS_DIR / "b20_receipt.json"
+    b20 = None
     if b20_file.exists():
-        b20 = json.loads(b20_file.read_text())
-        if not is_live_receipt(b20, require_tx=False):
+        try:
+            b20 = json.loads(b20_file.read_text())
+        except json.JSONDecodeError:
+            b20 = None
+    if not is_live_receipt(b20, require_tx=False):
+        try:
             b20 = read_b20()
             RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
             b20_file.write_text(json.dumps(b20, indent=2))
+        except Exception:  # noqa: BLE001 - offline clone must still render the beat
+            b20 = None
+    if is_live_receipt(b20, require_tx=False):
+        receipts.append(b20)
     else:
-        b20 = read_b20()
-        RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
-        b20_file.write_text(json.dumps(b20, indent=2))
-    require_live_receipt(x402, kind="x402")
-    require_live_receipt(b20, kind="b20")
-    receipts = [x402, b20]
-    unexercised: list[str] = []
-    # ACP is optional: an unexercised partner stack must be reported as absent,
-    # never synthesised, and must not take down the Base settlement beat.
+        unexercised.append("b20")
+
+    acp = load_acp_receipt()
     if is_live_receipt(acp, require_tx=True):
         receipts.append(acp)
     else:
         unexercised.append("acp")
-    return {"receipts": receipts, "unexercised_stacks": unexercised}
+
+    return {
+        "receipts": receipts,
+        "unexercised_stacks": unexercised,
+        "bootstrap_hint": (
+            "No live receipts in this checkout (demo-data/ is gitignored). "
+            "Run `make bootstrap-onchain` with CDP keys to execute them."
+            if not receipts
+            else None
+        ),
+    }
 
 
 def collect_settlement_receipts(gov: Any | None = None) -> dict[str, Any]:

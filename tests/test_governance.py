@@ -174,3 +174,23 @@ def test_decision_context_builds_on_an_empty_store(gov):
     assert context["counterparty_hash"] is None
     # With nothing recalled there is no history to weigh, so cost wins.
     assert select_vendor(context) == CHEAPEST
+
+
+def test_rollback_does_not_claim_success_without_a_snapshot(gov):
+    """An onchain anchor attests a chain head; it does not store tier state.
+
+    Snapshots are in-process, so across a restart restore() cannot rebuild anything. It
+    must say that rather than returning restored_entities=0 in a success-shaped payload.
+    """
+    from ledgermind.rollback import RollbackManager
+
+    gov.set_entity("case", "C1", {"amount": 1}, agent_id="planner", evidence_ref="t")
+    manager = RollbackManager(gov)
+    manager.capture("beat-1")
+    assert manager.restore("beat-1")["restored"] is True
+
+    fresh = RollbackManager(gov)  # simulates a new process
+    result = fresh.restore("beat-1")
+    assert result["restored"] is False
+    assert result["restored_entities"] == 0
+    assert "does not store tier state" in result["reason"]

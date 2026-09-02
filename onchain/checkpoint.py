@@ -38,7 +38,19 @@ def anchor_checkpoint(label: str, chain_head_hash: str, metadata: dict[str, Any]
         "explorer_url": None,
     }
 
+    # The signer lives in demo-data/onchain/wallet.json; only the CDP bootstrap path
+    # exported it to EVM_PRIVATE_KEY, so a plain `make demo` never anchored anything and
+    # every checkpoint silently recorded anchor_method=local_receipt while the README
+    # claimed rollback restores to an on-Base checkpoint.
     private_key = os.environ.get("EVM_PRIVATE_KEY", "")
+    if not private_key:
+        try:
+            from onchain.cdp_wallet import load_wallet_state
+
+            private_key = (load_wallet_state() or {}).get("private_key", "")
+        except Exception:  # noqa: BLE001 - anchoring is best-effort
+            private_key = ""
+
     if private_key:
         try:
             w3 = Web3(Web3.HTTPProvider(_rpc_url()))
@@ -49,15 +61,23 @@ def anchor_checkpoint(label: str, chain_head_hash: str, metadata: dict[str, Any]
                 "to": account.address,
                 "value": 0,
                 "nonce": nonce,
-                "gas": 21000,
                 "maxFeePerGas": w3.eth.gas_price,
                 "maxPriorityFeePerGas": w3.to_wei(0.001, "gwei"),
                 "chainId": w3.eth.chain_id,
+                # The chain head rides in the calldata: 64 hex chars at 16 gas per
+                # non-zero byte, so the flat 21000 used before was below the intrinsic
+                # cost and every anchor would have reverted as "intrinsic gas too low".
                 "data": w3.to_hex(text=chain_head_hash[:64]),
             }
+            tx["gas"] = int(w3.eth.estimate_gas(tx) * 1.2)
             signed = account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+            # web3 v7 returns the digest without a 0x prefix. Receipt validation
+            # (is_live_tx_hash) requires ^0x[0-9a-f]{64}$, and explorer links need it too,
+            # so a bare digest would make a genuine anchor read as a fake one.
             tx_hex = tx_hash.hex()
+            if not tx_hex.startswith("0x"):
+                tx_hex = "0x" + tx_hex
             base = "sepolia.basescan.org" if "sepolia" in _rpc_url() else "basescan.org"
             record["tx_hash"] = tx_hex
             record["explorer_url"] = f"https://{base}/tx/{tx_hex}"

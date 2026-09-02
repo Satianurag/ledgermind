@@ -38,9 +38,22 @@ class RollbackManager:
 
     def restore(self, label: str) -> dict[str, Any]:
         if label not in self._checkpoints:
+            # Snapshots live in this process. Across a restart only the anchor survives,
+            # and an anchor proves what the chain head *was* -- it does not carry the tier
+            # state needed to rebuild it. Say so, rather than returning restored_entities=0
+            # alongside a success-shaped payload.
             onchain = load_latest_checkpoint(label)
             if onchain:
-                return {"label": label, "restored_entities": 0, "onchain_checkpoint": onchain}
+                return {
+                    "label": label,
+                    "restored": False,
+                    "restored_entities": 0,
+                    "reason": (
+                        "anchor found but no in-process snapshot: an onchain checkpoint "
+                        "attests the chain head, it does not store tier state"
+                    ),
+                    "onchain_checkpoint": onchain,
+                }
             raise KeyError(f"checkpoint not found: {label}")
         snapshot = copy.deepcopy(self._checkpoints[label])
         raw = self._gov.raw
@@ -63,6 +76,7 @@ class RollbackManager:
         )
         return {
             "label": label,
+            "restored": True,
             "restored_entities": restored_entities,
             "chain_head": snapshot.get("chain_head"),
         }

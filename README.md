@@ -104,9 +104,18 @@ Results manifest: `eval/output/asr_report.json`
 > [`0xc85049e1927f79c565b61a8ab7c824aa7ffb10b2e07b30deb067f6745416005a`](https://sepolia.basescan.org/tx/0xc85049e1927f79c565b61a8ab7c824aa7ffb10b2e07b30deb067f6745416005a)
 
 Note the payment is gasless and facilitator-relayed, so the payer wallet's own
-transaction count is 0 — the evidence is the transaction, not the address. Also included:
-a capped Agentic Wallet whose cap is read from Sibyl REFERENCE before every payment
-(`onchain/wallet.py`), and a live B20 `eth_call` on Base mainnet (`onchain/b20.py`).
+transaction count is 0 — the evidence is the transaction, not the address.
+
+Chain-head checkpoints are anchored on Base Sepolia as self-transfers carrying the head in
+calldata, e.g.
+[`0xbf639388…`](https://sepolia.basescan.org/tx/0xbf639388be7c61f35c9abe3191b73b0b203db0b21bc4fd62989d919a8c74805b)
+(status success, block 46285791). An anchor attests what the chain head *was*; it does not
+store tier state, so `RollbackManager.restore()` reports `restored: false` across a process
+restart rather than claiming a recovery it cannot perform.
+
+Also included: a capped Agentic Wallet whose cap is read from Sibyl REFERENCE before every
+payment (`onchain/wallet.py`) — $2.50 is refused against the remembered $2.00 cap while
+$0.50 passes — and a live B20 `eth_call` on Base mainnet (`onchain/b20.py`).
 Code: [`onchain/`](onchain/)
 
 **Virtuals — not yet exercised.** The ACP client is implemented

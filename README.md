@@ -78,23 +78,61 @@ remembered amount is caught and located.
 ## Eval harness
 
 ```bash
-make eval   # 22-input poisoning gauntlet, vanilla Sibyl vs Ledgermind
+make eval                                              # default subset
+uv run python eval/run_utility.py --n 40 --k 8         # as reported below
 ```
 
-**Status: being rebuilt (Sep 2026).** The current gauntlet reports an attack-success
-rate over a denominator that includes clean controls, which flatters both arms, and its
-content-detection path is a keyword match rather than a semantic one. Those numbers are
-not defensible, so they are not quoted here.
+Methodology, threat model and the measured Sibyl constraints:
+[`docs/eval-methodology.md`](docs/eval-methodology.md).
 
-The replacement follows the published methodology in
-[arXiv 2608.21230](https://arxiv.org/abs/2608.21230): **utility retained** (poisoned
-accuracy / clean accuracy) on a [LongMemEval](https://github.com/xiaowu0162/LongMemEval)
-subset at ~1.2% corpus contamination, reported alongside the false-positive rate on
-benign untrusted content. ASR is deliberately dropped as the primary metric -- it
-"cannot distinguish a memory that resisted an attack from one the attack rendered
-useless."
+ASR was dropped as the headline metric. Per
+[arXiv 2608.21230](https://arxiv.org/abs/2608.21230) it "cannot distinguish a memory that
+resisted an attack from one the attack rendered useless" — a defense that quarantines
+everything scores perfectly and destroys the product. We report **utility retained**
+(poisoned accuracy ÷ clean accuracy) on [LongMemEval](https://github.com/xiaowu0162/LongMemEval),
+the benchmark Sibyl itself reports against.
 
-Results manifest: `eval/output/asr_report.json`
+**40 questions, k=8, 2.10% corpus contamination,
+one false memory per question, `gemini-3.5-flash`. API error rate 2.5%, excluded from accuracy
+rather than scored as wrong.**
+
+| gate | clean | poisoned | utility retained | Corpus N | poison occupancy |
+|---|---|---|---|---|---|
+| `none` | 0.475 | 0.100 | **21.1%** | 0.051 | 0.138 |
+| `provenance_weighted` | 0.475 | 0.125 | **26.3%** | 0.103 | 0.119 |
+| `bounded_occupancy` | 0.475 | 0.125 | **26.3%** | 0.125 | 0.125 |
+| `adjudicated` | 0.462 | 0.410 | **88.9%** | 0.359 | 0.125 |
+
+- `none` — no provenance signal. Utility collapses to 21%.
+- `provenance_weighted` — additive trust penalty. Barely moves, reproducing the paper's
+  finding that additive weighting has "no usable middle ground".
+- `bounded_occupancy` — provenance reserves retrieval capacity instead of penalising score.
+  This is, as far as we can tell, the first implementation of the gate that paper proposes
+  and states it did not build. Against a *single* false memory the cap does not bind
+  (1 of 8 slots is already under a 20% ceiling), so it barely helps — an honest null we
+  report rather than hide. Its value shows under flooding, where it cuts poison occupancy
+  from 0.875 to 0.125 and restores evidence recall from 0.125 to 1.000.
+- `adjudicated` — bounded occupancy plus provenance-aware answering, where a chain-verified
+  internal record beats a contradicting external one. **89%
+  utility retained.**
+
+**Corpus N** is the fairness test: a fraction of *genuine* evidence is itself marked
+untrusted. Any provenance defense looks perfect by excluding all untrusted content, and
+Corpus N is where hard filtering destroys the answer along with the attack. Adjudication
+scores 0.359 there against 0.051
+undefended.
+
+The result that matters is the *shape*: bounding how much untrusted content reaches the
+context fixes retrieval but not correctness — one false memory beside the true one still
+flips the answer. Adjudication is what recovers utility. That is the thesis of this
+project, measured rather than asserted.
+
+Clean accuracy is 0.475 rather than the ~0.85 reported in the
+literature because Sibyl is zero-embedding: retrieval is FTS5 term matching, not vector
+similarity. The comparison across arms is unaffected — every arm reads the identical store.
+
+Every run writes a manifest (run id, dataset, model, k, contamination, cap utilisation,
+error rate, wall clock) to `eval/output/`.
 
 ## Partner stacks
 

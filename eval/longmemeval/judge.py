@@ -7,11 +7,41 @@ retrieved context or which arm produced it -- so it cannot favour a condition.
 
 from __future__ import annotations
 
+import random
+import time
 from typing import Any
 
 from ledgermind.vertex import generate_content
 
 ABSTAIN = "I don't know"
+ERROR_PREFIX = "__ERROR__"
+
+# Vertex returns 429 RESOURCE_EXHAUSTED under concurrency. Without a retry these surface
+# as unparseable answers and get graded INCORRECT, which silently reports a throttled run
+# as a catastrophic accuracy collapse -- an earlier n=40 sweep scored 30/40 questions
+# wrong for exactly this reason. Transient failures must be retried, and whatever still
+# fails must be counted as an error rather than as a wrong answer.
+_TRANSIENT = ("429", "resource_exhausted", "503", "unavailable", "deadline", "timeout")
+
+
+def _is_transient(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _TRANSIENT)
+
+
+def generate_with_retry(model: str, prompt: str, *, attempts: int = 6) -> str:
+    delay = 2.0
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return generate_content(model, prompt)
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            if not _is_transient(exc) or attempt == attempts - 1:
+                break
+            time.sleep(delay + random.uniform(0, 1.5))
+            delay = min(delay * 2, 45.0)
+    return f"{ERROR_PREFIX}: {type(last).__name__}: {last}"[:200]
 
 _ANSWER_PROMPT = """Answer the question using only the recalled memory below.
 If the memory does not contain the answer, reply exactly: {abstain}
@@ -80,20 +110,21 @@ def answer_question(
         context=build_context(docs, with_provenance=adjudicated),
         question=question,
     )
-    try:
-        return generate_content(model, prompt)
-    except Exception as exc:  # noqa: BLE001 - one bad call must not kill a run
-        return f"__ERROR__: {type(exc).__name__}: {exc}"[:200]
+    return generate_with_retry(model, prompt)
 
 
-def grade(model: str, question: str, gold: str, prediction: str) -> bool:
-    if prediction.startswith("__ERROR__"):
-        return False
+def is_error(prediction: str) -> bool:
+    return prediction.startswith(ERROR_PREFIX)
+
+
+def grade(model: str, question: str, gold: str, prediction: str) -> bool | None:
+    """True/False, or None when the call failed and the item cannot be scored."""
+    if is_error(prediction):
+        return None
     if not prediction.strip():
         return False
     prompt = _JUDGE_PROMPT.format(question=question, gold=gold, prediction=prediction)
-    try:
-        verdict = generate_content(model, prompt).strip().upper()
-    except Exception:  # noqa: BLE001
-        return False
-    return verdict.startswith("CORRECT")
+    verdict = generate_with_retry(model, prompt)
+    if is_error(verdict):
+        return None
+    return verdict.strip().upper().startswith("CORRECT")

@@ -91,15 +91,26 @@ class TelemetryLogger:
         modified = {k: v for k, v in context.items() if k != remove_key}
         counter = decision_fn(modified)
         flipped = baseline != counter
+
+        # Cite the removed item by its real content hash. The on-screen panel is the
+        # evidence that a specific remembered record caused the decision, so a
+        # placeholder key name is not enough.
+        removed = context.get(remove_key)
+        removed_hash = (
+            content_hash(removed) if isinstance(removed, (dict, list)) and removed else None
+        )
+        short = removed_hash[:16] if removed_hash else remove_key
         return {
             "baseline": baseline,
             "counterfactual": counter,
             "flipped": flipped,
             "removed_key": remove_key,
+            "removed_content_hash": removed_hash,
             "explanation": (
-                f"Decision flipped because memory item {remove_key} changed"
+                f"Removing memory item {short} ({remove_key}) changes the decision "
+                f"from '{baseline}' to '{counter}'."
                 if flipped
-                else f"Decision stable without {remove_key}"
+                else f"Decision is stable without {remove_key} ('{baseline}')."
             ),
         }
 

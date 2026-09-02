@@ -5,9 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from ledgermind.chain import content_hash
 from ledgermind.config import get_settings
-from ledgermind.decisions import build_decision_context, select_vendor
+from ledgermind.decisions import build_decision_context, explain_flip, select_vendor
 from ledgermind.store import GovernedMemoryClient
 
 
@@ -23,10 +22,11 @@ def recall_and_decide() -> dict:
         return {
             "priority": priority,
             "counterparty": counterparty,
-            "counterparty_hash": content_hash(counterparty) if counterparty else None,
+            "counterparty_hash": context.get("counterparty_hash"),
             "events_count": len(events),
             "search_hits": len(search_hits),
             "decision": decision,
+            "why": explain_flip(context, decision),
             "commit": _git_short_hash(),
         }
 

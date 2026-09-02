@@ -101,7 +101,8 @@ def run_condition(
         return {
             "question_id": record["question_id"],
             "question_type": record.get("question_type"),
-            "correct": correct,
+            "correct": bool(correct),
+            "scorable": correct is not None,
             "prediction": prediction[:200],
             "retrieved": len(docs),
             "poison_in_context": sum(1 for d in docs if d["is_poison"]),
@@ -139,7 +140,8 @@ def main() -> int:
     parser.add_argument("--untrusted-evidence-fraction", type=float, default=0.30)
     parser.add_argument("--poison-per-question", type=int, default=1,
                         help="attacker write budget: 1 = single false memory, >1 = flooding")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Vertex throttles above ~4 concurrent calls on this project")
     parser.add_argument("--out", default=str(ROOT / "eval" / "output" / "utility_report.json"))
     args = parser.parse_args()
 
@@ -203,8 +205,15 @@ def main() -> int:
     def agg(results: list[dict[str, Any]]) -> dict[str, Any]:
         n = len(results) or 1
         slots = sum(r["retrieved"] for r in results) or 1
+        scorable = [r for r in results if r["scorable"]]
+        denom = len(scorable) or 1
         return {
-            "accuracy": round(sum(r["correct"] for r in results) / n, 4),
+            # Accuracy is over items that actually returned a model answer. Counting a
+            # throttled call as a wrong answer understates every arm.
+            "accuracy": round(sum(r["correct"] for r in scorable) / denom, 4),
+            "scored": len(scorable),
+            "errors": len(results) - len(scorable),
+            "error_rate": round((len(results) - len(scorable)) / n, 4),
             "evidence_recall": round(sum(r["has_evidence"] for r in results) / n, 4),
             "poison_occupancy": round(sum(r["poison_in_context"] for r in results) / slots, 4),
             "mean_retrieved": round(slots / n, 2),
@@ -294,9 +303,17 @@ def main() -> int:
         print(f"{gate:22} {s['clean_accuracy']:>7.3f} {s['poisoned_accuracy']:>9.3f} "
               f"{ret:>9} {s['corpus_n_accuracy']:>8.3f} {s['poison_occupancy']:>11.3f} "
               f"{s['evidence_recall_poisoned']:>10.3f}")
+    worst = max(c["error_rate"] for c in conditions.values())
+    if worst:
+        print(f"\nAPI error rate (worst condition): {worst:.1%} "
+              f"-- these items are excluded from accuracy, not scored as wrong.")
     if incomplete:
-        print(f"\nWARNING: {incomplete} shard-corpora were truncated by the cap.")
+        print(f"WARNING: {incomplete} shard-corpora were truncated by the cap.")
     print(f"\nwritten: {out}")
+    if worst > 0.05:
+        print(f"FAIL: error rate {worst:.1%} exceeds 5% -- results are not trustworthy.",
+              file=sys.stderr)
+        return 1
     return 0
 
 

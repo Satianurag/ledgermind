@@ -1,17 +1,39 @@
 {
   "name": "ledgermind",
   "version": "0.1.0",
-  "description": "Governed coordination memory for agent teams",
+  "description": "Standalone verifier for Ledgermind receipt chains \u2014 recompute every SHA-256 link over RFC 8785 canonical JSON and name the first broken one. No dependencies.",
   "license": "MIT",
+  "main": "index.js",
   "bin": {
     "ledgermind": "./bin/ledgermind.js"
   },
   "files": [
+    "index.js",
     "bin/",
+    "test.js",
     "README.md"
   ],
-  "keywords": ["sibyl", "memory", "governance", "agents"],
+  "keywords": [
+    "sibyl",
+    "memory",
+    "governance",
+    "agents",
+    "tamper-evident",
+    "hash-chain",
+    "rfc8785",
+    "jcs",
+    "provenance"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Satianurag/ledgermind.git",
+    "directory": "packages/npm/ledgermind"
+  },
+  "homepage": "https://github.com/Satianurag/ledgermind#readme",
   "engines": {
     "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test.js"
   }
 }

@@ -1,43 +1,98 @@
-"""FastAPI + htmx demo UI."""
+"""FastAPI app: JSON API for the Next.js front end, plus a Jinja fallback UI.
+
+Both surfaces read the same functions in ui/api.py, so they cannot disagree about what
+the demo did. The Jinja routes are the fallback: if the Next.js app is not running, the
+demo still boots and every beat still renders.
+"""
 
 from __future__ import annotations
 
-import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable
 
 from fastapi import FastAPI, Form, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from ledgermind.config import get_settings
-from ledgermind.decisions import build_decision_context, select_vendor
-from ledgermind.defense import evaluate_injection
-from ledgermind.diff import diff_snapshots, render_rich_table, snapshot_entities
-from ledgermind.dispute import DisputeCongress
-from ledgermind.rollback import RollbackManager
 from ledgermind.store import GovernedMemoryClient
-from ledgermind.telemetry import TelemetryLogger
 
-from onchain import write_receipts_to_governance
-from ui.poison_cards import POISON_CARDS
+from ui import api
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 app = FastAPI(title="Ledgermind Demo", version="0.1.0")
+
+# The Next.js front end runs on :3000 during the demo.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
 _waitlist_count = 0
-
-
-def _commit_hash() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except Exception:
-        return "dev"
 
 
 def _gov() -> GovernedMemoryClient:
     return GovernedMemoryClient(get_settings().sibyl_memory_db)
+
+
+def _with_gov(fn: Callable[..., dict[str, Any]], *args: Any) -> dict[str, Any]:
+    with _gov() as gov:
+        return fn(gov, *args)
+
+
+# --------------------------------------------------------------------------- JSON API
+
+
+@app.get("/api/state")
+async def api_state() -> JSONResponse:
+    return JSONResponse(_with_gov(api.state_data))
+
+
+@app.post("/api/inject")
+async def api_inject(payload: dict[str, Any]) -> JSONResponse:
+    card_id = str(payload.get("card_id", ""))
+    text = str(payload.get("text", ""))
+    return JSONResponse(_with_gov(api.inject_data, card_id, text))
+
+
+@app.post("/api/rollback")
+async def api_rollback() -> JSONResponse:
+    return JSONResponse(_with_gov(api.rollback_data))
+
+
+@app.get("/api/congress")
+async def api_congress() -> JSONResponse:
+    return JSONResponse(_with_gov(api.congress_data))
+
+
+@app.get("/api/settlement")
+async def api_settlement() -> JSONResponse:
+    return JSONResponse(_with_gov(api.settlement_data))
+
+
+@app.get("/api/montage")
+async def api_montage() -> JSONResponse:
+    return JSONResponse(_with_gov(api.montage_data))
+
+
+@app.get("/api/diff")
+async def api_diff() -> JSONResponse:
+    return JSONResponse(_with_gov(api.diff_data))
+
+
+@app.get("/api/recall")
+async def api_recall() -> JSONResponse:
+    """Fresh-session recall beat — the rules section 03 gate evidence."""
+    return JSONResponse(_with_gov(api.recall_data))
+
+
+# ------------------------------------------------------------------ Jinja fallback UI
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -46,127 +101,63 @@ async def index(request: Request) -> HTMLResponse:
         request,
         "index.html",
         {
-            "commit": _commit_hash(),
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "poison_cards": POISON_CARDS,
+            "commit": api.commit_hash(),
+            "timestamp": api.utc_now(),
+            "poison_cards": api.POISON_CARDS,
         },
     )
 
 
 @app.post("/inject", response_class=HTMLResponse)
-async def inject(
-    request: Request,
-    card_id: str = Form(...),
-    text: str = Form(""),
-) -> HTMLResponse:
-    card = next((c for c in POISON_CARDS if c["id"] == card_id), POISON_CARDS[0])
-    with _gov() as gov:
-        rb = RollbackManager(gov)
-        rb.capture("pre-heist")
-        verdict = evaluate_injection(
-            gov,
-            agent_id="external",
-            kind="counterparty",
-            name="meridian-bank-update",
-            body={"instruction": text or card["text"]},
-            source_trust_tier=card["tier"],
-            evidence_ref=f"judge:{card_id}",
-            simulate_chain_break=card.get("simulate_chain_break", False),
-        )
+async def inject(request: Request, card_id: str = Form(...), text: str = Form("")) -> HTMLResponse:
+    data = _with_gov(api.inject_data, card_id, text)
     return TEMPLATES.TemplateResponse(
-        request,
-        "partials/verdict.html",
-        {"verdict": verdict.to_dict(), "card": card},
+        request, "partials/verdict.html", {"verdict": data["verdict"], "card": data["card"]}
     )
 
 
 @app.post("/rollback", response_class=HTMLResponse)
 async def rollback(request: Request) -> HTMLResponse:
-    with _gov() as gov:
-        rb = RollbackManager(gov)
-        result = rb.restore("pre-heist")
-    return TEMPLATES.TemplateResponse(
-        request,
-        "partials/rollback.html",
-        {"result": result},
-    )
+    data = _with_gov(api.rollback_data)
+    return TEMPLATES.TemplateResponse(request, "partials/rollback.html", {"result": data["result"]})
 
 
 @app.get("/congress", response_class=HTMLResponse)
 async def congress(request: Request) -> HTMLResponse:
-    with _gov() as gov:
-        body = DisputeCongress(gov)
-        w = gov.set_entity(
-            "journal",
-            "payout-status",
-            {"status": "released"},
-            agent_id="worker",
-            evidence_ref="congress:vesper",
-        )
-        a = gov.set_entity(
-            "journal",
-            "payout-status-held",
-            {"status": "held"},
-            agent_id="auditor",
-            evidence_ref="congress:kestrel",
-        )
-        tree_w = w.get("chain_entry", {}).get("tree", "")
-        tree_a = a.get("chain_entry", {}).get("tree", "")
-        dispute = body.open_dispute(
-            dispute_id="CASE-2214-01",
-            subject_category="worker:journal",
-            subject_name="payout-status",
-            version_a={"status": "released"},
-            version_b={"status": "held"},
-            agent_a="worker",
-            agent_b="auditor",
-            hash_a=w.get("content_hash", ""),
-            hash_b=a.get("content_hash", ""),
-        )
-        citations = [{"tree": tree_a or tree_w}] if (tree_a or tree_w) else []
-        dispute, arbiter_meta = body.arbitrate_with_vertex(
-            dispute,
-            citations=citations,
-            fallback_winner_idx=1,
-            confidence=0.92,
-        )
-        dispute = body.await_human_gate(dispute, approved=True)
-        body.promote_resolution(dispute, subject_kind="journal", agent_id="worker")
+    data = _with_gov(api.congress_data)
     return TEMPLATES.TemplateResponse(
-        request,
-        "partials/congress.html",
-        {"dispute": dispute.to_body(), "arbiter": arbiter_meta},
+        request, "partials/congress.html", {"dispute": data["dispute"], "arbiter": data["arbiter"]}
     )
 
 
 @app.get("/settlement", response_class=HTMLResponse)
 async def settlement(request: Request) -> HTMLResponse:
-    with _gov() as gov:
-        data = write_receipts_to_governance(gov)
-        context = build_decision_context(gov)
-        decision = select_vendor(context)
-        telemetry = TelemetryLogger(gov)
-        cp = context.get("counterparty") or {}
-        citations = [
-            telemetry.build_citation("counterparty:meridian", cp),
-        ]
-        entry = telemetry.log_decision(
-            agent="governance",
-            citations=citations,
-            outcome=decision,
-            ts=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        telemetry.save_manifest(run_id=_commit_hash(), versions={"ledgermind": "0.1.0"})
-        flip = telemetry.counterfactual_replay(select_vendor, context, remove_key="counterparty")
+    data = _with_gov(api.settlement_data)
     return TEMPLATES.TemplateResponse(
         request,
         "partials/settlement.html",
         {
-            "data": data,
-            "decision": decision,
-            "flip": flip,
-            "entry": entry.to_dict(),
+            "data": {k: data[k] for k in ("receipts", "unexercised_stacks") if k in data},
+            "decision": data["decision"],
+            "flip": data["flip"],
+            "entry": data["entry"],
         },
+    )
+
+
+@app.get("/montage", response_class=HTMLResponse)
+async def montage(request: Request) -> HTMLResponse:
+    data = _with_gov(api.montage_data)
+    return TEMPLATES.TemplateResponse(
+        request, "partials/montage.html", {"diff": data["diff"], "table": data["table"]}
+    )
+
+
+@app.get("/diff", response_class=HTMLResponse)
+async def memory_diff(request: Request) -> HTMLResponse:
+    data = _with_gov(api.diff_data)
+    return TEMPLATES.TemplateResponse(
+        request, "partials/montage.html", {"diff": data["diff"], "table": data["table"]}
     )
 
 
@@ -180,36 +171,3 @@ async def waitlist_join() -> JSONResponse:
     global _waitlist_count
     _waitlist_count += 1
     return JSONResponse({"count": _waitlist_count})
-
-
-@app.get("/montage", response_class=HTMLResponse)
-async def montage(request: Request) -> HTMLResponse:
-    with _gov() as gov:
-        before = snapshot_entities(gov.raw.list_entities())
-        gov.set_entity(
-            "case",
-            "CASE-2214",
-            {"status": "resolved", "invoice": "INV-8841"},
-            agent_id="planner",
-            evidence_ref="montage:tier-promotion",
-        )
-        after = snapshot_entities(gov.raw.list_entities())
-        diff = diff_snapshots(before, after)
-        table = render_rich_table(diff)
-    return TEMPLATES.TemplateResponse(
-        request,
-        "partials/montage.html",
-        {"diff": diff, "table": table},
-    )
-
-
-@app.get("/diff", response_class=HTMLResponse)
-async def memory_diff(request: Request) -> HTMLResponse:
-    with _gov() as gov:
-        entities = gov.raw.list_entities()
-        snap = snapshot_entities(entities)
-    return TEMPLATES.TemplateResponse(
-        request,
-        "partials/montage.html",
-        {"diff": {"snapshot": snap}, "table": f"{len(snap)} entities indexed"},
-    )

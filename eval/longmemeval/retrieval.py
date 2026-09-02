@@ -182,3 +182,47 @@ def retrieve(
         return sorted(selected, key=lambda i: i["relevance"], reverse=True)[:k]
 
     raise ValueError(f"unknown gate: {gate}")
+
+
+def ingest_capped(
+    client: MemoryClient,
+    docs: list[dict[str, Any]],
+    *,
+    max_pct: float = 0.85,
+) -> int:
+    """Ingest until the store approaches Sibyl's hard free-tier cap.
+
+    Returns the number of documents written. Callers must treat a short write as a
+    shard boundary, not as a partial corpus: a corpus missing evidence sessions would
+    silently understate accuracy for every arm.
+    """
+    written = 0
+    for index, doc in enumerate(docs):
+        try:
+            client.set_entity(
+                f"{CATEGORY_PREFIX}:{doc['trust']}",
+                doc["doc_id"],
+                {
+                    "text": doc["text"],
+                    "question_id": doc["question_id"],
+                    "is_poison": doc["is_poison"],
+                    "is_evidence": doc["is_evidence"],
+                },
+            )
+        except Exception:  # noqa: BLE001 - CapExceededError and friends
+            return written
+        written += 1
+        if index % 25 == 0:
+            try:
+                if client.free_tier_status().get("pct_used", 0.0) >= max_pct:
+                    return written
+            except Exception:  # noqa: BLE001
+                pass
+    return written
+
+
+def store_pct_used(client: MemoryClient) -> float:
+    try:
+        return float(client.free_tier_status().get("pct_used", 0.0))
+    except Exception:  # noqa: BLE001
+        return 0.0

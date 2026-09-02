@@ -131,6 +131,32 @@ Clean accuracy is 0.475 rather than the ~0.85 reported in the
 literature because Sibyl is zero-embedding: retrieval is FTS5 term matching, not vector
 similarity. The comparison across arms is unaffected — every arm reads the identical store.
 
+### Under a flooding adversary
+
+An attacker with write access can restate the same false memory as often as it likes.
+`--poison-per-question 8` is that budget: 14.64% contamination,
+same 40 questions, 2.5% API error rate.
+
+| gate | clean | poisoned | utility retained | poison occupancy | evidence recall |
+|---|---|---|---|---|---|
+| `none` | 0.450 | 0.100 | **22.2%** | 0.875 | 0.275 |
+| `provenance_weighted` | 0.475 | 0.077 | **16.2%** | 0.819 | 0.375 |
+| `bounded_occupancy` | 0.450 | 0.125 | **27.8%** | 0.125 | 0.875 |
+| `adjudicated` | 0.462 | 0.410 | **88.9%** | 0.125 | 0.875 |
+
+This is where the gate earns its place. Undefended, the flood takes **87.5%
+of the retrieved context** and evidence recall falls to 0.275.
+Bounded occupancy holds the attacker to 12.5% and
+restores evidence recall to 0.875 — but
+utility only reaches 27.8%, because getting the
+true record back into context is not the same as being believed. Adjudication takes that to
+88.9%.
+
+Note that additive provenance weighting scores **16.2%,
+below the 22.2% of no defense at all** — it reshuffles ranking
+without displacing the flood, and pays for it. That is the "no usable middle ground" result
+from arXiv 2608.21230 reproduced on a different substrate.
+
 Every run writes a manifest (run id, dataset, model, k, contamination, cap utilisation,
 error rate, wall clock) to `eval/output/`.
 

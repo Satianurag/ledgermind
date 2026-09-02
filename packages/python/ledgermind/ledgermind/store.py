@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sibyl_memory_client import MemoryClient
+from sibyl_memory_client.exceptions import NotFoundError
 
 from ledgermind.chain import GENESIS_HASH, ChainEntry, chain_link, content_hash
 from ledgermind.provenance import (
@@ -196,7 +197,14 @@ class GovernedMemoryClient:
 
     def get_entity(self, kind: str, name: str, *, agent_id: str = "shared") -> dict[str, Any] | None:
         category = self._category(agent_id, kind) if ":" not in kind else kind
-        raw = self._client.get_entity(category, name)
+        # Sibyl raises NotFoundError for a missing entity while get_state/get_reference
+        # return None. Every caller here treats a miss as None (`or {}`), so normalise it:
+        # an unseeded store must read as empty, not explode. A fresh clone has no
+        # demo-data/, which is exactly the state a judge starts from.
+        try:
+            raw = self._client.get_entity(category, name)
+        except NotFoundError:
+            return None
         if not raw:
             return None
         body = raw.get("body", raw)

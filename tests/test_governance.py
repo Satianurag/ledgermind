@@ -152,3 +152,25 @@ def test_governance_only_sibyl_import():
         if "sibyl_memory_client" in py.read_text():
             offenders.append(str(py))
     assert not offenders, f"sibyl import outside store.py: {offenders}"
+
+
+def test_missing_reads_return_none_on_an_empty_store(gov):
+    """A fresh clone has no demo-data/, and that is the state a judge starts from.
+
+    Sibyl raises NotFoundError for a missing entity while get_state/get_reference return
+    None. Callers all treat a miss as falsy (`or {}`), so the governance layer normalises
+    it. Without this the settlement beat 500s on an unseeded store.
+    """
+    assert gov.get_entity("counterparty", "does-not-exist", agent_id="worker") is None
+    assert gov.get_state("does-not-exist") is None
+    assert gov.get_reference("does-not-exist") is None
+
+
+def test_decision_context_builds_on_an_empty_store(gov):
+    from ledgermind.decisions import CHEAPEST, build_decision_context, select_vendor
+
+    context = build_decision_context(gov)
+    assert context["counterparty"] == {}
+    assert context["counterparty_hash"] is None
+    # With nothing recalled there is no history to weigh, so cost wins.
+    assert select_vendor(context) == CHEAPEST

@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 CHECKS = [
     ("Tests pass", ["uv", "run", "pytest", "tests/", "-q", "--ignore=tests/test_vertex_live.py"]),
-    ("ASR eval", ["uv", "run", "python", "eval/run_asr.py"]),
-    ("Gauntlet gate", ["uv", "run", "pytest", "tests/test_gauntlet.py", "-q"]),
+    ("Retrieval gates", ["uv", "run", "pytest", "tests/test_gates.py", "-q"]),
     ("MCP parity", ["uv", "run", "python", "scripts/exercise_mcp.py"]),
     ("Deletion test", ["uv", "run", "pytest", "tests/test_deletion.py", "-q"]),
     ("Scope guard", ["uv", "run", "pytest", "tests/test_prd_scope.py", "-q"]),
+    ("Demo UI boots", ["bash", "scripts/smoke_ui.sh"]),
     ("Ruff lint", ["uv", "run", "ruff", "check", "packages/python", "tests", "demo", "agents", "onchain", "ui"]),
 ]
 

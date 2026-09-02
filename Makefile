@@ -1,4 +1,4 @@
-.PHONY: smoke-ui sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up eval-promptfoo setup-acp
+.PHONY: smoke-ui sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up setup-acp
 
 sync:
 	uv sync --all-extras
@@ -25,10 +25,8 @@ demo: reset seed
 	uv run uvicorn ui.app:app --reload --port 8787
 
 eval:
-	PYTHONPATH=. uv run python eval/run_asr.py
+	PYTHONPATH=. uv run python eval/run_utility.py
 
-eval-promptfoo:
-	npm run eval
 
 mcp-exercise:
 	uv run python scripts/exercise_mcp.py

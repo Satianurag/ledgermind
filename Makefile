@@ -1,4 +1,4 @@
-.PHONY: sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up eval-promptfoo setup-acp
+.PHONY: smoke-ui sync smoke-vertex reset seed demo eval test lint ui install-npm verify-prd bootstrap-onchain prerun mcp-exercise langfuse-up eval-promptfoo setup-acp
 
 sync:
 	uv sync --all-extras
@@ -53,3 +53,6 @@ verify-pins:
 
 verify-prd:
 	uv run python scripts/verify_prd.py
+
+smoke-ui:
+	bash scripts/smoke_ui.sh

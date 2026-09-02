@@ -43,9 +43,9 @@ def _gov() -> GovernedMemoryClient:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "commit": _commit_hash(),
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "poison_cards": POISON_CARDS,
@@ -74,8 +74,9 @@ async def inject(
             simulate_chain_break=card.get("simulate_chain_break", False),
         )
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/verdict.html",
-        {"request": request, "verdict": verdict.to_dict(), "card": card},
+        {"verdict": verdict.to_dict(), "card": card},
     )
 
 
@@ -85,8 +86,9 @@ async def rollback(request: Request) -> HTMLResponse:
         rb = RollbackManager(gov)
         result = rb.restore("pre-heist")
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/rollback.html",
-        {"request": request, "result": result},
+        {"result": result},
     )
 
 
@@ -131,8 +133,9 @@ async def congress(request: Request) -> HTMLResponse:
         dispute = body.await_human_gate(dispute, approved=True)
         body.promote_resolution(dispute, subject_kind="journal", agent_id="worker")
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/congress.html",
-        {"request": request, "dispute": dispute.to_body(), "arbiter": arbiter_meta},
+        {"dispute": dispute.to_body(), "arbiter": arbiter_meta},
     )
 
 
@@ -156,9 +159,9 @@ async def settlement(request: Request) -> HTMLResponse:
         telemetry.save_manifest(run_id=_commit_hash(), versions={"ledgermind": "0.1.0"})
         flip = telemetry.counterfactual_replay(select_vendor, context, remove_key="counterparty")
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/settlement.html",
         {
-            "request": request,
             "data": data,
             "decision": decision,
             "flip": flip,
@@ -194,8 +197,9 @@ async def montage(request: Request) -> HTMLResponse:
         diff = diff_snapshots(before, after)
         table = render_rich_table(diff)
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/montage.html",
-        {"request": request, "diff": diff, "table": table},
+        {"diff": diff, "table": table},
     )
 
 
@@ -205,6 +209,7 @@ async def memory_diff(request: Request) -> HTMLResponse:
         entities = gov.raw.list_entities()
         snap = snapshot_entities(entities)
     return TEMPLATES.TemplateResponse(
+        request,
         "partials/montage.html",
-        {"request": request, "diff": {"snapshot": snap}, "table": f"{len(snap)} entities indexed"},
+        {"diff": {"snapshot": snap}, "table": f"{len(snap)} entities indexed"},
     )

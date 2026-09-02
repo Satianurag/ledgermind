@@ -33,9 +33,16 @@ def load_settlement_receipts() -> dict[str, Any]:
         RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
         b20_file.write_text(json.dumps(b20, indent=2))
     require_live_receipt(x402, kind="x402")
-    require_live_receipt(acp, kind="acp")
     require_live_receipt(b20, kind="b20")
-    return {"receipts": [x402, b20, acp]}
+    receipts = [x402, b20]
+    unexercised: list[str] = []
+    # ACP is optional: an unexercised partner stack must be reported as absent,
+    # never synthesised, and must not take down the Base settlement beat.
+    if is_live_receipt(acp, require_tx=True):
+        receipts.append(acp)
+    else:
+        unexercised.append("acp")
+    return {"receipts": receipts, "unexercised_stacks": unexercised}
 
 
 def collect_settlement_receipts(gov: Any | None = None) -> dict[str, Any]:

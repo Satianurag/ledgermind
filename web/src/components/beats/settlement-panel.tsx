@@ -1,11 +1,18 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Chip, Label } from "@/components/shell/chip";
+import { Stage } from "@/components/shell/stage";
 import type { SettlementData } from "@/lib/api";
-import { short } from "@/lib/api";
+import { hash } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+const KIND_LABEL: Record<string, string> = {
+  x402: "x402 payment",
+  b20: "B20 read",
+  acp: "Virtuals ACP job",
+  checkpoint: "chain-head anchor",
+};
 
 export function SettlementPanel({
   data,
@@ -17,92 +24,114 @@ export function SettlementPanel({
   onRun: () => void;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle>Settlement on Base</CardTitle>
-            <CardDescription>
-              Live receipts written back into governed memory, and the spend cap read from the
-              REFERENCE tier before any payment.
-            </CardDescription>
-          </div>
-          <Button size="sm" variant="outline" onClick={onRun} disabled={loading}>
-            {loading ? "Loading…" : data ? "Refresh" : "Load receipts"}
-          </Button>
+    <Stage
+      eyebrow="Beat 05 · settlement"
+      title="Real money, governed by remembered policy"
+      claim="The spend cap is not a constant in the code. It is read from the REFERENCE tier before every payment, so changing the remembered policy changes what the wallet is allowed to do."
+      action={
+        <Button size="sm" variant={data ? "outline" : "default"} onClick={onRun} disabled={loading}>
+          {loading ? "Loading…" : data ? "Refresh" : "Load receipts"}
+        </Button>
+      }
+    >
+      {!data && (
+        <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
+          <p className="text-sm text-muted-foreground">
+            Receipts are written back into governed memory as COLD events and REFERENCE records.
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!data && <p className="text-sm text-muted-foreground">Not yet loaded.</p>}
+      )}
 
-        {data && (
-          <>
-            <div className="space-y-2">
-              {data.receipts.map((receipt) => (
-                <div
-                  key={receipt.kind}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="uppercase">
-                      {receipt.kind}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {receipt.amount_usdc ? `${receipt.amount_usdc} USDC · ` : ""}
-                      {receipt.network ?? "base"}
-                    </span>
-                  </div>
-                  {receipt.explorer_url && (
+      {data && (
+        <>
+          <div>
+            <Label className="mb-3 block">Onchain evidence</Label>
+            <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+              {data.receipts.map((r) => (
+                <div key={r.kind} className="flex flex-wrap items-center gap-3 bg-card/40 px-4 py-3">
+                  <Chip tone="verified" dot>
+                    executed
+                  </Chip>
+                  <span className="text-sm font-medium">{KIND_LABEL[r.kind] ?? r.kind}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {r.amount_usdc ? `${r.amount_usdc} USDC · ` : ""}
+                    {r.network ?? "base"}
+                  </span>
+                  {r.explorer_url && (
                     <a
-                      className="font-mono text-[11px] underline underline-offset-2"
-                      href={receipt.explorer_url}
+                      href={r.explorer_url}
                       target="_blank"
                       rel="noreferrer"
+                      className="hash ml-auto text-[11px] text-evidence underline-offset-4 hover:underline"
                     >
-                      {receipt.tx_hash ? short(receipt.tx_hash, 18) : "explorer"}
+                      {r.tx_hash ? hash(r.tx_hash, 10, 8) : "explorer ↗"}
                     </a>
                   )}
                 </div>
               ))}
-              {data.unexercised_stacks.map((stack) => (
-                <div key={stack} className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  <span className="font-mono uppercase">{stack}</span> — not exercised in this
-                  checkout. Reported as absent rather than synthesised.
+              {data.unexercised_stacks.map((s) => (
+                <div key={s} className="flex flex-wrap items-center gap-3 bg-card/20 px-4 py-3">
+                  <Chip tone="neutral">not exercised</Chip>
+                  <span className="text-sm text-muted-foreground">{KIND_LABEL[s] ?? s}</span>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    reported as absent, never synthesised
+                  </span>
                 </div>
               ))}
             </div>
+          </div>
 
-            {data.cap_check_over && (
-              <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                <p className="mb-1 font-medium">Memory-governed wallet cap</p>
-                <p className="text-muted-foreground">
-                  {data.cap_check_over.allowed ? "allowed" : data.cap_check_over.reason} — cap read
-                  from <code>{data.cap_check_over.policy_key}</code> in the REFERENCE tier before
-                  the payment, not from a constant.
-                </p>
-              </div>
-            )}
-
-            <Separator />
-
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Commercial decision</p>
-              <p className="text-lg font-medium">{data.decision}</p>
-              <p className="text-sm text-muted-foreground">{data.why}</p>
+          {data.cap_check_over && (
+            <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+              {[
+                { amount: "$2.50", check: data.cap_check_over },
+                { amount: "$0.50", check: data.cap_check_under },
+              ].map(
+                (row) =>
+                  row.check && (
+                    <div key={row.amount} className="bg-card px-4 py-3.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="hash tabular text-sm">{row.amount}</span>
+                        <Chip tone={row.check.allowed ? "verified" : "breach"} dot>
+                          {row.check.allowed ? "allowed" : "refused"}
+                        </Chip>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        {row.check.allowed
+                          ? `within the remembered cap`
+                          : (row.check as { reason?: string }).reason}
+                      </p>
+                    </div>
+                  ),
+              )}
             </div>
+          )}
 
-            <div className="rounded-md border-l-2 border-foreground/30 bg-muted/30 p-3">
-              <p className="text-xs font-medium">Counterfactual replay</p>
-              <p className="mt-1 text-xs text-muted-foreground">{data.flip.explanation}</p>
+          <div
+            className={cn(
+              "overflow-hidden rounded-lg border",
+              data.flip.flipped ? "border-verified-dim/50" : "border-border",
+            )}
+          >
+            <div className="px-5 py-4">
+              <Label>Commercial decision</Label>
+              <p className="mt-1.5 text-xl font-semibold tracking-tight">{data.decision}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{data.why}</p>
+            </div>
+            <div className="border-t border-border bg-card/40 px-5 py-3.5">
+              <Label>Counterfactual replay</Label>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {data.flip.explanation}
+              </p>
               {data.flip.removed_content_hash && (
-                <p className="mt-1 font-mono text-[11px]">
-                  cited item {short(data.flip.removed_content_hash, 24)}
+                <p className="hash mt-1.5 text-[11px] text-evidence">
+                  {hash(data.flip.removed_content_hash, 12, 8)}
                 </p>
               )}
             </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </>
+      )}
+    </Stage>
   );
 }

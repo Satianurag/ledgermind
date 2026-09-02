@@ -128,3 +128,76 @@
     @apply font-sans;
   }
 }
+/* ---------------------------------------------------------------------------
+   Ledgermind forensic console.
+
+   Colour is semantic, never decorative. Every hue below means one thing and is
+   used only for that thing, so a judge can read state from colour alone:
+
+     verified  chain intact, trusted provenance, upheld claim
+     caution   untrusted-but-legitimate source, quarantined item
+     breach    broken chain link, hostile source, refused payment
+     evidence  onchain receipts and content hashes
+
+   Dark ground because this is a forensic tool and because it films better.
+   --------------------------------------------------------------------------- */
+:root {
+  --lm-verified: oklch(0.72 0.16 158);
+  --lm-verified-dim: oklch(0.42 0.09 158);
+  --lm-caution: oklch(0.78 0.15 78);
+  --lm-caution-dim: oklch(0.45 0.09 78);
+  --lm-breach: oklch(0.65 0.21 22);
+  --lm-breach-dim: oklch(0.40 0.13 22);
+  --lm-evidence: oklch(0.72 0.13 240);
+  --lm-evidence-dim: oklch(0.42 0.08 240);
+  --lm-rule: oklch(0.28 0.008 260);
+}
+
+.dark {
+  --background: oklch(0.16 0.008 260);
+  --foreground: oklch(0.93 0.004 260);
+  --card: oklch(0.19 0.009 260);
+  --card-foreground: oklch(0.93 0.004 260);
+  --popover: oklch(0.19 0.009 260);
+  --popover-foreground: oklch(0.93 0.004 260);
+  --primary: oklch(0.93 0.004 260);
+  --primary-foreground: oklch(0.19 0.009 260);
+  --secondary: oklch(0.25 0.009 260);
+  --secondary-foreground: oklch(0.93 0.004 260);
+  --muted: oklch(0.24 0.008 260);
+  --muted-foreground: oklch(0.66 0.012 260);
+  --accent: oklch(0.26 0.010 260);
+  --accent-foreground: oklch(0.93 0.004 260);
+  --destructive: oklch(0.65 0.21 22);
+  --border: oklch(0.28 0.008 260);
+  --input: oklch(0.30 0.009 260);
+  --ring: oklch(0.55 0.02 260);
+}
+
+@theme inline {
+  --color-verified: var(--lm-verified);
+  --color-verified-dim: var(--lm-verified-dim);
+  --color-caution: var(--lm-caution);
+  --color-caution-dim: var(--lm-caution-dim);
+  --color-breach: var(--lm-breach);
+  --color-breach-dim: var(--lm-breach-dim);
+  --color-evidence: var(--lm-evidence);
+  --color-evidence-dim: var(--lm-evidence-dim);
+}
+
+@layer base {
+  body {
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Hashes must line up and stay scannable; proportional digits make them mush. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero";
+  }
+  .hash {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-ligatures: none;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+}

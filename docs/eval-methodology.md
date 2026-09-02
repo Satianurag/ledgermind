@@ -82,11 +82,21 @@ against `sibyl-memory-client` 0.7.0 on 2026-09-02.
    1 MB of text. This is why the corpus is built as sequential 8–10 question shards, each
    its own throwaway store, pooled after the fact.
 
-4. **`search()` joins query terms conjunctively and strips operators.** Passing a whole
-   question drops any document missing a single content word, so the evidence session is
-   usually never retrieved. `OR` is sanitised away; quoted phrases survive. The harness
-   therefore builds its candidate pool from unioned single-term searches scored by term
-   coverage.
+4. **`search()` is conjunctive with a relax-on-empty fallback, and strips operators.**
+   The strict pass requires every query term; it relaxes to partial matches *only when
+   the strict pass returns nothing*. The consequence is counter-intuitive: retrieval gets
+   worse as the corpus grows, because as soon as any one document matches every term,
+   every partially-matching document is suppressed — including the one holding the answer.
+
+   Measured on `sibyl-memory-client` 0.7.0. With a lone document missing the term
+   `issue`, the query `"GPS system service issue"` still returns it. Add a second document
+   containing all four terms and the same query returns only the new document; the first
+   is dropped. `AND`/`OR`/`NOT` are sanitised away, so they cannot be used to widen the
+   match; quoted phrases survive.
+
+   Passing a whole question is therefore actively harmful in a realistic corpus, which is
+   why the harness builds its candidate pool from unioned single-term searches scored by
+   term coverage rather than from one question-shaped query.
 
 ## Things that would otherwise inflate the numbers
 

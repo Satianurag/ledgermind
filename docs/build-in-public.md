@@ -27,8 +27,10 @@ is a claim.
 >   per *account*, not per database, and summed across every store an agent can resolve.
 > • Stored size is ~7× raw text once FTS5 and the search shadow are counted. The cap holds
 >   under 1 MB of text.
-> • `search()` joins query terms conjunctively, so passing a whole question drops any
->   document missing one word — the evidence session is usually never retrieved at all.
+> • `search()` is conjunctive with a relax-on-empty fallback. It only falls back to partial
+>   matches when the strict pass returns nothing, so retrieval gets *worse* as the corpus
+>   grows: one document matching every term suppresses every partial match, including the
+>   one holding the answer.
 >
 > All three shaped the architecture. Details and repro in the repo.
 >

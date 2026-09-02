@@ -10,11 +10,21 @@ All agent reads and writes flow through the **governance layer** — the only co
 
 | Location | Role |
 |----------|------|
-| [`packages/python/ledgermind/ledgermind/store.py`](packages/python/ledgermind/ledgermind/store.py) | `GovernedMemoryClient` — sole Sibyl SDK import |
-| [`packages/python/ledgermind/ledgermind/chain.py`](packages/python/ledgermind/ledgermind/chain.py) | SHA-256 receipt chain per memory tree |
-| [`demo/seed_case_2214.py`](demo/seed_case_2214.py) | CASE-2214 demo data into five Sibyl tiers |
+| [`packages/python/ledgermind/ledgermind/store.py`](packages/python/ledgermind/ledgermind/store.py) | `GovernedMemoryClient` — the **only** `sibyl_memory_client` import in the codebase |
+| [`packages/python/ledgermind/ledgermind/chain.py`](packages/python/ledgermind/ledgermind/chain.py) | SHA-256 receipt chain per memory tree, over RFC 8785 canonical JSON |
+| [`agents/graph.py`](agents/graph.py) | Three agents whose every decision is read back out of Sibyl |
+| [`packages/python/ledgermind/ledgermind/dispute.py`](packages/python/ledgermind/ledgermind/dispute.py) | Contradiction opens a dispute instead of overwriting the prior record |
+| [`demo/seed_case_2214.py`](demo/seed_case_2214.py) | CASE-2214 demo data across all five Sibyl tiers |
 
-**Deletion test:** stub Sibyl in CI → all three agents fail at first memory op (`tests/test_deletion.py`).
+Nothing in `agents/graph.py` restates the case file from a literal. The payout amount comes
+from the WARM case entity, the approval threshold from the REFERENCE policy, and the
+contradiction that opens the dispute is *detected* by comparing two COLD journal records.
+
+**Deletion test:** stub Sibyl in CI → all three agents fail at their first memory op
+([`tests/test_deletion.py`](tests/test_deletion.py)). Two further tests make the claim
+falsifiable rather than assertable: the same graph must reach a *different* payout decision
+when memory holds a different amount, and a dispute must open *only* when two remembered
+records actually disagree ([`tests/test_langgraph.py`](tests/test_langgraph.py)).
 
 ## Quick start
 
@@ -44,12 +54,26 @@ make reset && make seed
 
 Receipts land in `demo-data/onchain/` with judge-clickable Sepolia explorer URLs (B20 links to mainnet token page).
 
-## npm package
+## npm package — independent chain verifier
+
+A tamper-evident log is only worth something if a third party can check it *without
+trusting the tool that produced it*. [`packages/npm/ledgermind`](packages/npm/ledgermind)
+is a zero-dependency reimplementation of RFC 8785 canonicalisation and the SHA-256 link
+function, cross-validated against Python `jcs` 0.2.1 in CI.
 
 ```bash
-npm install -g ./packages/npm/ledgermind
-ledgermind demo --catch-poison
+uv run ledgermind export-chain --out chain.json
+npx ledgermind verify chain.json
 ```
+
+```
+  OK    warm:planner:case/CASE-2214  (3 links)
+  BROKEN warm:worker:journal/payout-status
+         first bad link at sequence 2
+```
+
+Exits `1` on a broken link, so it drops into CI as a guard. Changing one digit of one
+remembered amount is caught and located.
 
 ## Eval harness
 
